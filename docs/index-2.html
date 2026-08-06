@@ -1,0 +1,474 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Gajraula — Sky &amp; Air</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+<style>
+  :root {
+    /* Apple system palette, light mode */
+    --bg: #f5f5f7;
+    --surface: #ffffff;
+    --surface-2: #fbfbfd;
+    --line: rgba(0,0,0,0.08);
+    --text: #1d1d1f;
+    --text-muted: #6e6e73;
+    --blue: #0071e3;
+
+    /* AQI category colors (EPA-style, Apple system-color flavored) */
+    --good: #34c759;
+    --moderate: #d9a400;
+    --sensitive: #ff9500;
+    --unhealthy: #ff3b30;
+    --veryunhealthy: #af52de;
+    --hazardous: #8b2942;
+
+    --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    --font-serif: ui-serif, "New York", Georgia, "Times New Roman", serif;
+    --font-mono: ui-monospace, "SF Mono", "Menlo", Consolas, monospace;
+  }
+  * { box-sizing: border-box; -webkit-font-smoothing: antialiased; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    min-height: 100vh;
+    padding: clamp(20px, 4vw, 56px);
+  }
+  .wrap { max-width: 1180px; margin: 0 auto; }
+
+  header { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 12px; margin-bottom: 28px; }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  h1 {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: clamp(28px, 4vw, 40px);
+    margin: 4px 0 0;
+    letter-spacing: -0.01em;
+  }
+  .updated { font-family: var(--font-mono); font-size: 12px; color: var(--text-muted); text-align: right; }
+  .updated strong { color: var(--text); font-weight: 600; }
+
+  .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  @media (max-width: 640px) { .hero { grid-template-columns: 1fr; } }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  }
+  .stat-label { font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); }
+  .stat-value {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    font-size: clamp(46px, 7vw, 64px);
+    line-height: 1;
+    margin: 8px 0 2px;
+    letter-spacing: -0.02em;
+  }
+  .stat-sub { color: var(--text-muted); font-size: 14px; }
+
+  .haze-gauge { margin-top: 16px; }
+  .haze-track {
+    position: relative;
+    height: 10px;
+    border-radius: 6px;
+    background: linear-gradient(90deg, var(--good) 0%, var(--moderate) 33%, var(--sensitive) 55%, var(--unhealthy) 72%, var(--veryunhealthy) 88%, var(--hazardous) 100%);
+  }
+  .haze-marker {
+    position: absolute;
+    top: -5px;
+    width: 3px;
+    height: 20px;
+    background: var(--text);
+    border-radius: 2px;
+    transform: translateX(-1.5px);
+    box-shadow: 0 0 0 3px #fff, 0 1px 3px rgba(0,0,0,0.25);
+  }
+  .haze-scale { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10px; color: var(--text-muted); margin-top: 6px; }
+
+  /* strip of every remaining field from the latest reading */
+  .detail-strip {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    margin-bottom: 20px;
+  }
+  .detail-cell { background: var(--surface); padding: 14px 16px; }
+  .detail-cell .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+  .detail-cell .v { font-size: 18px; font-weight: 600; margin-top: 4px; }
+
+  .charts { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+  @media (max-width: 780px) { .charts { grid-template-columns: 1fr; } }
+  .chart-card canvas { max-height: 200px; }
+  .chart-title { font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 14px; }
+
+  .section-title { font-family: var(--font-serif); font-size: 20px; font-weight: 600; margin: 28px 2px 12px; }
+  .section-note { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin: -6px 2px 12px; }
+
+  table { width: 100%; border-collapse: collapse; font-family: var(--font-mono); font-size: 12.5px; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 10.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    position: sticky;
+    top: 0;
+    background: var(--surface-2);
+  }
+  tbody tr:hover { background: var(--surface-2); }
+  tbody tr:last-child td { border-bottom: none; }
+  .table-scroll { overflow: auto; max-height: 560px; border-radius: 16px; }
+  .row-count { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+
+  .empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: var(--text-muted);
+  }
+  .empty .big { font-family: var(--font-serif); font-size: 22px; color: var(--text); margin-bottom: 8px; }
+
+  footer { margin-top: 28px; font-size: 12px; color: var(--text-muted); text-align: center; }
+  footer a { color: var(--blue); text-decoration: none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <div class="eyebrow">Gajraula · Amroha District · Uttar Pradesh, India · 28.8347°N 78.2439°E</div>
+      <h1>Sky &amp; Air</h1>
+    </div>
+    <div class="updated">Last reading<br><strong id="lastUpdated">—</strong></div>
+  </header>
+
+  <div id="content">
+    <div class="empty">
+      <div class="big">Loading readings…</div>
+    </div>
+  </div>
+
+  <footer>
+    Data via <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo</a> · model-based estimate, no ground station in Gajraula · logged hourly
+  </footer>
+
+</div>
+
+<script>
+const CSV_URL = './data/weather_aqi_log.csv';
+const CHART_MAX_POINTS = 168; // ~1 week at hourly resolution, keeps charts legible
+
+const WEATHER_CODES = {
+  0: 'Clear sky', 1: 'Mainly clear', 2: 'Partly cloudy', 3: 'Overcast',
+  45: 'Fog', 48: 'Depositing rime fog',
+  51: 'Light drizzle', 53: 'Drizzle', 55: 'Dense drizzle',
+  61: 'Light rain', 63: 'Rain', 65: 'Heavy rain',
+  71: 'Light snow', 73: 'Snow', 75: 'Heavy snow',
+  80: 'Light showers', 81: 'Showers', 82: 'Violent showers',
+  95: 'Thunderstorm', 96: 'Thunderstorm w/ hail', 99: 'Severe thunderstorm',
+};
+
+const COMPASS = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+
+function aqiCategory(aqi) {
+  if (aqi == null || isNaN(aqi)) return { label: 'No data', color: 'var(--text-muted)' };
+  if (aqi <= 50) return { label: 'Good', color: 'var(--good)' };
+  if (aqi <= 100) return { label: 'Moderate', color: 'var(--moderate)' };
+  if (aqi <= 150) return { label: 'Unhealthy (sensitive groups)', color: 'var(--sensitive)' };
+  if (aqi <= 200) return { label: 'Unhealthy', color: 'var(--unhealthy)' };
+  if (aqi <= 300) return { label: 'Very unhealthy', color: 'var(--veryunhealthy)' };
+  return { label: 'Hazardous', color: 'var(--hazardous)' };
+}
+
+function windDir(deg) {
+  const d = parseFloat(deg);
+  if (isNaN(d)) return '—';
+  return COMPASS[Math.round(d / 22.5) % 16];
+}
+
+// simple RFC4180-ish CSV parser: handles quoted fields with commas
+function parseCSV(text) {
+  const lines = text.trim().split(/\r?\n/);
+  if (lines.length < 2) return [];
+  const splitLine = (line) => {
+    const cells = [];
+    let cur = '', inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (inQuotes) {
+        if (c === '"' && line[i + 1] === '"') { cur += '"'; i++; }
+        else if (c === '"') { inQuotes = false; }
+        else { cur += c; }
+      } else {
+        if (c === '"') inQuotes = true;
+        else if (c === ',') { cells.push(cur); cur = ''; }
+        else cur += c;
+      }
+    }
+    cells.push(cur);
+    return cells;
+  };
+  const headers = splitLine(lines[0]);
+  return lines.slice(1).filter(Boolean).map((line) => {
+    const cells = splitLine(line);
+    const row = {};
+    headers.forEach((h, i) => { row[h] = cells[i]; });
+    return row;
+  });
+}
+
+function fmtTime(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function num(v, digits) {
+  const n = parseFloat(v);
+  if (isNaN(n)) return '—';
+  return digits === undefined ? n : n.toFixed(digits);
+}
+
+function renderEmpty(message) {
+  document.getElementById('content').innerHTML = `<div class="empty"><div class="big">${message}</div><div>Once the hourly Action runs, readings will appear here automatically.</div></div>`;
+}
+
+function buildLayout() {
+  document.getElementById('content').innerHTML = `
+    <div class="hero">
+      <div class="card">
+        <div class="stat-label">Temperature now</div>
+        <div class="stat-value" id="tempNow">—</div>
+        <div class="stat-sub" id="tempSub">—</div>
+      </div>
+      <div class="card">
+        <div class="stat-label">Air quality now (US AQI)</div>
+        <div class="stat-value" id="aqiNow">—</div>
+        <div class="stat-sub" id="aqiSub">—</div>
+        <div class="haze-gauge">
+          <div class="haze-track"><div class="haze-marker" id="haziMarker" style="left:0%"></div></div>
+          <div class="haze-scale"><span>0</span><span>50</span><span>100</span><span>150</span><span>200</span><span>300+</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="detail-strip" id="detailStrip"></div>
+
+    <div class="charts">
+      <div class="card chart-card">
+        <div class="chart-title">Temperature — actual vs. feels like (°C)</div>
+        <canvas id="tempChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-title">Air quality index — US vs. EU</div>
+        <canvas id="aqiChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-title">Humidity (%)</div>
+        <canvas id="humidityChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-title">Wind speed (km/h)</div>
+        <canvas id="windChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-title">Rain &amp; precipitation (mm)</div>
+        <canvas id="rainChart"></canvas>
+      </div>
+      <div class="card chart-card">
+        <div class="chart-title">Particulates — PM2.5 vs. PM10 (µg/m³)</div>
+        <canvas id="pmChart"></canvas>
+      </div>
+    </div>
+
+    <div class="section-title">Every logged hourly reading</div>
+    <div class="section-note" id="rowCount"></div>
+    <div class="card table-scroll" style="padding:0;">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (IST)</th><th>Time (UTC)</th>
+            <th>Temp °C</th><th>Feels °C</th><th>Humidity %</th>
+            <th>Precip mm</th><th>Rain mm</th>
+            <th>Wind km/h</th><th>Wind Dir</th><th>Conditions</th>
+            <th>US AQI</th><th>EU AQI</th>
+            <th>PM2.5</th><th>PM10</th><th>CO</th><th>NO2</th><th>SO2</th><th>Ozone</th>
+          </tr>
+        </thead>
+        <tbody id="tableBody"></tbody>
+      </table>
+    </div>
+  `;
+}
+
+function chartMulti(ctx, labels, datasets) {
+  return new Chart(ctx, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: datasets.length > 1,
+          labels: { color: '#6e6e73', font: { family: '-apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif', size: 11 }, boxWidth: 12 },
+        },
+      },
+      scales: {
+        x: { ticks: { color: '#6e6e73', maxTicksLimit: 8, font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: { ticks: { color: '#6e6e73', font: { size: 10 } }, grid: { color: 'rgba(0,0,0,0.05)' } },
+      },
+    },
+  });
+}
+
+function ds(label, data, color, dashed) {
+  return {
+    label, data,
+    borderColor: color,
+    backgroundColor: color + '1f',
+    fill: dashed ? false : true,
+    tension: 0.3,
+    pointRadius: 0,
+    borderWidth: 2,
+    borderDash: dashed ? [4, 3] : undefined,
+  };
+}
+
+async function main() {
+  let rows;
+  try {
+    const res = await fetch(CSV_URL, { cache: 'no-store' });
+    if (!res.ok) throw new Error('fetch failed');
+    rows = parseCSV(await res.text());
+  } catch (e) {
+    renderEmpty("Couldn't load the data file yet");
+    return;
+  }
+
+  if (!rows.length) {
+    renderEmpty('No readings logged yet');
+    return;
+  }
+
+  const latest = rows[rows.length - 1];
+
+  buildLayout();
+
+  document.getElementById('lastUpdated').textContent = fmtTime(latest.timestamp_ist || latest.timestamp_utc);
+
+  // hero: temperature
+  const temp = parseFloat(latest.temperature_c);
+  document.getElementById('tempNow').textContent = isNaN(temp) ? '—' : Math.round(temp) + '°';
+  document.getElementById('tempSub').textContent =
+    (WEATHER_CODES[parseInt(latest.weather_code)] || 'Conditions unknown') +
+    ' · feels ' + (latest.apparent_temperature_c ? Math.round(latest.apparent_temperature_c) + '°' : '—') +
+    ' · ' + (latest.humidity_percent || '—') + '% humidity';
+
+  // hero: AQI
+  const aqi = parseFloat(latest.us_aqi);
+  const cat = aqiCategory(aqi);
+  const aqiEl = document.getElementById('aqiNow');
+  aqiEl.textContent = isNaN(aqi) ? '—' : Math.round(aqi);
+  aqiEl.style.color = cat.color;
+  document.getElementById('aqiSub').innerHTML = `<span style="color:${cat.color}">${cat.label}</span> · PM2.5 ${latest.pm2_5 || '—'} µg/m³`;
+  document.getElementById('haziMarker').style.left = Math.min(100, Math.max(0, (aqi / 300) * 100)) + '%';
+
+  // detail strip: every remaining field from the CSV, from the latest row
+  const details = [
+    ['Feels like', num(latest.apparent_temperature_c, 1) + '°C'],
+    ['Precipitation', num(latest.precipitation_mm, 1) + ' mm'],
+    ['Rain', num(latest.rain_mm, 1) + ' mm'],
+    ['Wind speed', num(latest.wind_speed_kmh, 1) + ' km/h'],
+    ['Wind direction', windDir(latest.wind_direction_deg) + ' (' + num(latest.wind_direction_deg, 0) + '°)'],
+    ['European AQI', num(latest.european_aqi, 0)],
+    ['PM10', num(latest.pm10, 1) + ' µg/m³'],
+    ['Carbon monoxide', num(latest.co, 0) + ' µg/m³'],
+    ['Nitrogen dioxide', num(latest.no2, 1) + ' µg/m³'],
+    ['Sulphur dioxide', num(latest.so2, 1) + ' µg/m³'],
+    ['Ozone', num(latest.ozone, 0) + ' µg/m³'],
+  ];
+  document.getElementById('detailStrip').innerHTML = details.map(([k, v]) =>
+    `<div class="detail-cell"><div class="k">${k}</div><div class="v">${v}</div></div>`
+  ).join('');
+
+  // charts use a capped window for legibility; table below shows everything
+  const chartRows = rows.slice(-CHART_MAX_POINTS);
+  const labels = chartRows.map((r) => fmtTime(r.timestamp_ist || r.timestamp_utc));
+
+  chartMulti(document.getElementById('tempChart'), labels, [
+    ds('Temp °C', chartRows.map((r) => parseFloat(r.temperature_c)), '#0071e3'),
+    ds('Feels °C', chartRows.map((r) => parseFloat(r.apparent_temperature_c)), '#ff9500', true),
+  ]);
+  chartMulti(document.getElementById('aqiChart'), labels, [
+    ds('US AQI', chartRows.map((r) => parseFloat(r.us_aqi)), '#ff3b30'),
+    ds('EU AQI', chartRows.map((r) => parseFloat(r.european_aqi)), '#af52de', true),
+  ]);
+  chartMulti(document.getElementById('humidityChart'), labels, [
+    ds('Humidity %', chartRows.map((r) => parseFloat(r.humidity_percent)), '#0071e3'),
+  ]);
+  chartMulti(document.getElementById('windChart'), labels, [
+    ds('Wind km/h', chartRows.map((r) => parseFloat(r.wind_speed_kmh)), '#34c759'),
+  ]);
+  chartMulti(document.getElementById('rainChart'), labels, [
+    ds('Rain mm', chartRows.map((r) => parseFloat(r.rain_mm) || 0), '#0071e3'),
+    ds('Precip mm', chartRows.map((r) => parseFloat(r.precipitation_mm) || 0), '#6e6e73', true),
+  ]);
+  chartMulti(document.getElementById('pmChart'), labels, [
+    ds('PM2.5', chartRows.map((r) => parseFloat(r.pm2_5)), '#ff3b30'),
+    ds('PM10', chartRows.map((r) => parseFloat(r.pm10)), '#ff9500', true),
+  ]);
+
+  // full table: every column, every logged row, most recent first
+  document.getElementById('rowCount').textContent = `${rows.length} hourly reading${rows.length === 1 ? '' : 's'} logged`;
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = rows.slice().reverse().map((r) => {
+    const rowAqi = aqiCategory(parseFloat(r.us_aqi));
+    return `
+    <tr>
+      <td>${fmtTime(r.timestamp_ist)}</td>
+      <td>${fmtTime(r.timestamp_utc)}</td>
+      <td>${num(r.temperature_c, 1)}</td>
+      <td>${num(r.apparent_temperature_c, 1)}</td>
+      <td>${num(r.humidity_percent, 0)}</td>
+      <td>${num(r.precipitation_mm, 1)}</td>
+      <td>${num(r.rain_mm, 1)}</td>
+      <td>${num(r.wind_speed_kmh, 1)}</td>
+      <td>${windDir(r.wind_direction_deg)}</td>
+      <td>${WEATHER_CODES[parseInt(r.weather_code)] || '—'}</td>
+      <td style="color:${rowAqi.color}">${num(r.us_aqi, 0)}</td>
+      <td>${num(r.european_aqi, 0)}</td>
+      <td>${num(r.pm2_5, 1)}</td>
+      <td>${num(r.pm10, 1)}</td>
+      <td>${num(r.co, 0)}</td>
+      <td>${num(r.no2, 1)}</td>
+      <td>${num(r.so2, 1)}</td>
+      <td>${num(r.ozone, 0)}</td>
+    </tr>
+  `;
+  }).join('');
+}
+
+main();
+</script>
+</body>
+</html>
