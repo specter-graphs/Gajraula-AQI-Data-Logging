@@ -27,7 +27,7 @@ const AQI_URL =
   `&current=us_aqi,european_aqi,pm10,pm2_5,carbon_monoxide,nitrogen_dioxide,sulphur_dioxide,ozone` +
   `&timezone=${encodeURIComponent(TZ)}`;
 
-const CSV_PATH = path.join(__dirname, "..", "data", "weather_aqi_log.csv");
+const CSV_PATH = path.join(__dirname, "..", "docs", "data", "weather_aqi_log.csv");
 
 const FIELDS = [
   "timestamp_utc",
