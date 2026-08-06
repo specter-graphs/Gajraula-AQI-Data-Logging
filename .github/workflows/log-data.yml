@@ -2,12 +2,25 @@ name: Log Gajraula Weather & AQI Data
 
 on:
   schedule:
-    # Every hour, on the hour, UTC. Adjust as you like: https://crontab.guru
-    - cron: "0 * * * *"
+    # Every hour, on the hour, IST (Asia/Kolkata, UTC+5:30).
+    # GitHub Actions cron always runs in UTC, so minute 30 here lands on
+    # the IST hour exactly (e.g. 00:30 UTC = 06:00 IST).
+    #
+    # TO VERIFY THE SCHEDULE IS FIRING AT ALL: temporarily change the line
+    # below to "*/5 * * * *" (every 5 minutes), push, and watch the Actions
+    # tab for 10-15 minutes. If runs show up, the mechanism works — switch
+    # the line back to "30 * * * *" and push again. If NO runs show up
+    # even on a 5-minute schedule, the problem is a repo setting, not this
+    # file (see the two Settings checks in the README / chat).
+    - cron: "*/5 * * * *"
   workflow_dispatch: {}
 
 permissions:
   contents: write
+
+concurrency:
+  group: log-data
+  cancel-in-progress: false
 
 jobs:
   log-data:
@@ -29,5 +42,10 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add docs/data/weather_aqi_log.csv
-          git diff --staged --quiet || git commit -m "Log weather & AQI data $(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          if git diff --staged --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Log weather & AQI data $(date -u +'%Y-%m-%dT%H:%M:%SZ') UTC"
+          git pull --rebase --autostash
           git push
