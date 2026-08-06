@@ -1,1 +1,2 @@
 timestamp_utc,timestamp_ist,temperature_c,apparent_temperature_c,humidity_percent,precipitation_mm,rain_mm,wind_speed_kmh,wind_direction_deg,weather_code,us_aqi,european_aqi,pm2_5,pm10,co,no2,so2,ozone
+2026-08-06T09:15:16.141Z,2026-08-06T14:45,27.1,32.1,90,0.6,0.4,13.2,70,80,92,65,14.2,14.3,327,7.9,6,98
